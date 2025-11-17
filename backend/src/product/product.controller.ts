@@ -41,4 +41,10 @@ export class ProductController {
   remove(@Param('id') id: string) {
     return this.productService.remove(id);
   }
+
+  @Post('mock')
+  generateMockData(@Query('count') count?: string) {
+    const countNumber = count ? parseInt(count, 10) : 20;
+    return this.productService.generateMockData(countNumber);
+  }
 }

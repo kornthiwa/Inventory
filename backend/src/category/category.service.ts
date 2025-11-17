@@ -122,4 +122,94 @@ export class CategoryService {
       throw new NotFoundException(`Category with ID ${id} not found`);
     }
   }
+
+  async generateMockData(count: number = 20): Promise<Category[]> {
+    const mockCategories = [
+      {
+        name: 'อิเล็กทรอนิกส์',
+        description: 'อุปกรณ์อิเล็กทรอนิกส์และเทคโนโลยี',
+      },
+      { name: 'เสื้อผ้า', description: 'เสื้อผ้าแฟชั่นและเครื่องแต่งกาย' },
+      {
+        name: 'อาหารและเครื่องดื่ม',
+        description: 'อาหารสำเร็จรูปและเครื่องดื่ม',
+      },
+      { name: 'ของใช้ในบ้าน', description: 'เครื่องใช้ไฟฟ้าและของใช้ในบ้าน' },
+      { name: 'กีฬาและกิจกรรม', description: 'อุปกรณ์กีฬาและกิจกรรมกลางแจ้ง' },
+      {
+        name: 'หนังสือและสื่อ',
+        description: 'หนังสือ นิตยสาร และสื่อการเรียนรู้',
+      },
+      { name: 'เครื่องสำอาง', description: 'เครื่องสำอางและผลิตภัณฑ์ดูแลผิว' },
+      { name: 'ของเล่น', description: 'ของเล่นเด็กและของสะสม' },
+      { name: 'เฟอร์นิเจอร์', description: 'เฟอร์นิเจอร์และของตกแต่งบ้าน' },
+      { name: 'ยานพาหนะ', description: 'อุปกรณ์และอะไหล่ยานพาหนะ' },
+      { name: 'สุขภาพและความงาม', description: 'ผลิตภัณฑ์สุขภาพและความงาม' },
+      { name: 'สัตว์เลี้ยง', description: 'อาหารและอุปกรณ์สำหรับสัตว์เลี้ยง' },
+      { name: 'เครื่องมือ', description: 'เครื่องมือช่างและอุปกรณ์งาน' },
+      { name: 'ของขวัญ', description: 'ของขวัญและของที่ระลึก' },
+      { name: 'คอมพิวเตอร์', description: 'อุปกรณ์คอมพิวเตอร์และอุปกรณ์เสริม' },
+      {
+        name: 'มือถือและแท็บเล็ต',
+        description: 'สมาร์ทโฟน แท็บเล็ต และอุปกรณ์เสริม',
+      },
+      { name: 'กล้องและอุปกรณ์ถ่ายภาพ', description: 'กล้องและอุปกรณ์ถ่ายภาพ' },
+      { name: 'เครื่องดนตรี', description: 'เครื่องดนตรีและอุปกรณ์เสียง' },
+      { name: 'เกมและคอนโซล', description: 'เกมและคอนโซลเกม' },
+      { name: 'ของใช้สำนักงาน', description: 'อุปกรณ์สำนักงานและเครื่องเขียน' },
+    ];
+
+    // Get existing codes to avoid duplicates
+    const existingCategories = await this.categoryModel
+      .find({}, { code: 1 })
+      .exec();
+    const existingCodes = new Set(existingCategories.map((cat) => cat.code));
+
+    // Find the highest number in existing codes
+    let maxNumber = 0;
+    existingCodes.forEach((code) => {
+      const match = code.match(/^CAT-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    });
+
+    // Generate unique codes
+    const categoriesToCreate: Array<{
+      name: string;
+      description?: string;
+      code: string;
+      active: boolean;
+    }> = [];
+    let currentNumber = maxNumber + 1;
+
+    for (let i = 0; i < count && i < mockCategories.length; i++) {
+      let code: string;
+      let attempts = 0;
+      do {
+        code = `CAT-${String(currentNumber).padStart(6, '0')}`;
+        currentNumber++;
+        attempts++;
+        if (attempts > 1000) {
+          // Fallback to timestamp if too many attempts
+          code = `CAT-${Date.now()}-${i}`;
+          break;
+        }
+      } while (existingCodes.has(code));
+
+      existingCodes.add(code);
+      categoriesToCreate.push({
+        ...mockCategories[i],
+        code,
+        active: true,
+      });
+    }
+
+    const createdCategories =
+      await this.categoryModel.insertMany(categoriesToCreate);
+    return createdCategories;
+  }
 }

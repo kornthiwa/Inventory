@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -32,6 +32,9 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import SearchIcon from "@mui/icons-material/Search";
+import DataObjectIcon from "@mui/icons-material/DataObject";
 import * as Yup from "yup";
 import {
   productService,
@@ -43,7 +46,6 @@ import { Formik, Form, Field } from "formik";
 
 const productSchema = Yup.object().shape({
   name: Yup.string().required("กรุณากรอกชื่อสินค้า"),
-  code: Yup.string(),
   price: Yup.number()
     .min(0, "ราคาต้องมากกว่าหรือเท่ากับ 0")
     .required("กรุณากรอกราคา"),
@@ -56,14 +58,29 @@ const productSchema = Yup.object().shape({
 export default function ProductsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { data: productsResponse, isLoading: productsLoading } = useQuery({
-    queryKey: ["products", page, limit],
-    queryFn: () => productService.getAll({ page, limit }),
+    queryKey: ["products", page, limit, searchQuery],
+    queryFn: () =>
+      productService.getAll({
+        page,
+        limit,
+        ...(searchQuery && { search: searchQuery }),
+      }),
+  });
+
+  const { data: productDetail, isLoading: productDetailLoading } = useQuery({
+    queryKey: ["product", viewingProduct?._id],
+    queryFn: () => productService.getById(viewingProduct!._id),
+    enabled: !!viewingProduct?._id,
   });
 
   const { data: categoriesResponse, isLoading: categoriesLoading } = useQuery({
@@ -74,19 +91,12 @@ export default function ProductsPage() {
   const createMutation = useMutation({
     mutationFn: (data: {
       name: string;
-      code?: string;
       description?: string;
       price: number;
       quantity: number;
-      sku?: string;
       category: string;
       active?: boolean;
-    }) => {
-      // ไม่ส่ง code ตอนสร้าง เพราะ backend จะสร้างให้อัตโนมัติ
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { code, ...dataWithoutCode } = data;
-      return productService.create(dataWithoutCode);
-    },
+    }) => productService.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["products", "dashboard"] });
@@ -112,7 +122,6 @@ export default function ProductsPage() {
       id: string;
       data: {
         name?: string;
-        code?: string;
         description?: string;
         price?: number;
         quantity?: number;
@@ -156,6 +165,30 @@ export default function ProductsPage() {
     },
   });
 
+  const mockDataMutation = useMutation({
+    mutationFn: (count: number) => productService.generateMockData(count),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "dashboard"] });
+      setErrorMessage(null);
+    },
+    onError: (error: {
+      response?: { data?: { message?: string } };
+      message?: string;
+    }) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "เกิดข้อผิดพลาดในการสร้างข้อมูลจำลอง";
+      setErrorMessage(message);
+    },
+  });
+
+  const handleGenerateMockData = () => {
+    if (!confirm("คุณต้องการสร้างข้อมูลจำลอง 20 รายการหรือไม่?")) return;
+    mockDataMutation.mutate(20);
+  };
+
   const products = productsResponse?.data || [];
   const categories = categoriesResponse?.data || [];
   const pagination = productsResponse?.pagination;
@@ -173,6 +206,36 @@ export default function ProductsPage() {
     setPage(1); // Reset to first page when changing limit
   };
 
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+      setPage(1); // Reset to first page when searching
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchInput(event.target.value);
+  };
+
+  const handleSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setSearchQuery(searchInput);
+    setPage(1);
+  };
+
+  const handleViewDetail = (product: Product) => {
+    setViewingProduct(product);
+    setDetailOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setDetailOpen(false);
+    setViewingProduct(null);
+  };
+
   const handleOpen = (product?: Product) => {
     setEditingProduct(product || null);
     setOpen(true);
@@ -185,7 +248,6 @@ export default function ProductsPage() {
 
   const handleSubmit = async (values: {
     name: string;
-    code?: string;
     description?: string;
     price: number;
     quantity: number;
@@ -205,19 +267,6 @@ export default function ProductsPage() {
     deleteMutation.mutate(id);
   };
 
-  if (loading) {
-    return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="60vh"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
     <Box>
       <Box
@@ -225,92 +274,154 @@ export default function ProductsPage() {
         justifyContent="space-between"
         alignItems="center"
         mb={3}
+        flexWrap="wrap"
+        gap={2}
       >
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           จัดการสินค้า
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpen()}
-        >
-          เพิ่มสินค้า
-        </Button>
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <Box
+            component="form"
+            onSubmit={handleSearchSubmit}
+            sx={{ display: "flex", gap: 1 }}
+          >
+            <TextField
+              placeholder="ค้นหาสินค้า..."
+              variant="outlined"
+              size="small"
+              value={searchInput}
+              onChange={handleSearchChange}
+              InputProps={{
+                startAdornment: (
+                  <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />
+                ),
+              }}
+              sx={{ minWidth: 250 }}
+            />
+            <Button
+              type="submit"
+              variant="outlined"
+              size="small"
+              sx={{ minWidth: "auto", px: 2 }}
+            >
+              ค้นหา
+            </Button>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<DataObjectIcon />}
+            onClick={handleGenerateMockData}
+            disabled={mockDataMutation.isPending}
+            color="secondary"
+          >
+            {mockDataMutation.isPending ? "กำลังสร้าง..." : "Mock Data (20)"}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpen()}
+          >
+            เพิ่มสินค้า
+          </Button>
+        </Box>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>รหัส</TableCell>
-              <TableCell>ชื่อสินค้า</TableCell>
-              <TableCell>หมวดหมู่</TableCell>
-              <TableCell align="right">ราคา</TableCell>
-              <TableCell align="right">จำนวน</TableCell>
-              <TableCell>สถานะ</TableCell>
-              <TableCell align="center">จัดการ</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {products.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} align="center">
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ py: 3 }}
-                  >
-                    ไม่พบข้อมูลสินค้า
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              products.map((product) => (
-                <TableRow key={product._id}>
-                  <TableCell>{product.code}</TableCell>
-                  <TableCell>{product.name}</TableCell>
-                  <TableCell>
-                    {typeof product.category === "object"
-                      ? product.category.name
-                      : "N/A"}
-                  </TableCell>
-                  <TableCell align="right">
-                    {new Intl.NumberFormat("th-TH", {
-                      style: "currency",
-                      currency: "THB",
-                    }).format(product.price)}
-                  </TableCell>
-                  <TableCell align="right">{product.quantity}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={product.active ? "ใช้งาน" : "ไม่ใช้งาน"}
-                      color={product.active ? "success" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpen(product)}
-                      color="primary"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(product._id)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
+      {loading ? (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          minHeight="60vh"
+        >
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>รหัส</TableCell>
+                  <TableCell>ชื่อสินค้า</TableCell>
+                  <TableCell>หมวดหมู่</TableCell>
+                  <TableCell align="right">ราคา</TableCell>
+                  <TableCell align="right">จำนวน</TableCell>
+                  <TableCell>สถานะ</TableCell>
+                  <TableCell align="center">จัดการ</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
+              </TableHead>
+              <TableBody>
+                {products.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ py: 3 }}
+                      >
+                        ไม่พบข้อมูลสินค้า
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  products.map((product) => (
+                    <TableRow key={product._id}>
+                      <TableCell>{product.code}</TableCell>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>
+                        {typeof product.category === "object"
+                          ? product.category.name
+                          : "N/A"}
+                      </TableCell>
+                      <TableCell align="right">
+                        {new Intl.NumberFormat("th-TH", {
+                          style: "currency",
+                          currency: "THB",
+                        }).format(product.price)}
+                      </TableCell>
+                      <TableCell align="right">{product.quantity}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={product.active ? "ใช้งาน" : "ไม่ใช้งาน"}
+                          color={product.active ? "success" : "default"}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleViewDetail(product)}
+                          color="info"
+                          title="ดูข้อมูลเพิ่มเติม"
+                        >
+                          <VisibilityIcon />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpen(product)}
+                          color="primary"
+                          title="แก้ไข"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDelete(product._id)}
+                          color="error"
+                          title="ลบ"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
       {pagination && (
         <Box
           sx={{
@@ -463,6 +574,127 @@ export default function ProductsPage() {
             </Form>
           )}
         </Formik>
+      </Dialog>
+
+      <Dialog
+        open={detailOpen}
+        onClose={handleCloseDetail}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>รายละเอียดสินค้า</DialogTitle>
+        <DialogContent>
+          {productDetailLoading ? (
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              py={4}
+            >
+              <CircularProgress />
+            </Box>
+          ) : productDetail ? (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  รหัสสินค้า
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {productDetail.code}
+                </Typography>
+              </Box>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  ชื่อสินค้า
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {productDetail.name}
+                </Typography>
+              </Box>
+              {productDetail.description && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    คำอธิบาย
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {productDetail.description}
+                  </Typography>
+                </Box>
+              )}
+              <Box sx={{ display: "flex", gap: 3, mb: 3 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    ราคา
+                  </Typography>
+                  <Typography variant="body1">
+                    {new Intl.NumberFormat("th-TH", {
+                      style: "currency",
+                      currency: "THB",
+                    }).format(productDetail.price)}
+                  </Typography>
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    จำนวนคงเหลือ
+                  </Typography>
+                  <Typography variant="body1">
+                    {productDetail.quantity}
+                  </Typography>
+                </Box>
+              </Box>
+              {productDetail.sku && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    SKU
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {productDetail.sku}
+                  </Typography>
+                </Box>
+              )}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  หมวดหมู่
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {typeof productDetail.category === "object"
+                    ? productDetail.category.name
+                    : "N/A"}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  สถานะ
+                </Typography>
+                <Chip
+                  label={productDetail.active ? "ใช้งาน" : "ไม่ใช้งาน"}
+                  color={productDetail.active ? "success" : "default"}
+                  size="small"
+                  sx={{ mt: 1 }}
+                />
+              </Box>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+              ไม่พบข้อมูลสินค้า
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDetail}>ปิด</Button>
+          {productDetail && (
+            <Button
+              variant="contained"
+              startIcon={<EditIcon />}
+              onClick={() => {
+                handleCloseDetail();
+                handleOpen(productDetail);
+              }}
+            >
+              แก้ไข
+            </Button>
+          )}
+        </DialogActions>
       </Dialog>
 
       <Snackbar

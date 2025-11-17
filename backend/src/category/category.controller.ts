@@ -44,4 +44,10 @@ export class CategoryController {
   remove(@Param('id') id: string) {
     return this.categoryService.remove(id);
   }
+
+  @Post('mock')
+  generateMockData(@Query('count') count?: string) {
+    const countNumber = count ? parseInt(count, 10) : 20;
+    return this.categoryService.generateMockData(countNumber);
+  }
 }

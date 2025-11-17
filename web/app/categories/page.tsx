@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -26,10 +26,15 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import SearchIcon from "@mui/icons-material/Search";
+import DataObjectIcon from "@mui/icons-material/DataObject";
 import * as Yup from "yup";
 import { categoryService } from "../lib/services";
 import { Formik, Form, Field } from "formik";
@@ -50,13 +55,29 @@ const categorySchema = Yup.object().shape({
 export default function CategoriesPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [viewingCategory, setViewingCategory] = useState<Category | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { data: categoriesResponse, isLoading: categoriesLoading } = useQuery({
-    queryKey: ["categories", page, limit],
-    queryFn: () => categoryService.getAll({ page, limit }),
+    queryKey: ["categories", page, limit, searchQuery],
+    queryFn: () =>
+      categoryService.getAll({
+        page,
+        limit,
+        ...(searchQuery && { search: searchQuery }),
+      }),
+  });
+
+  const { data: categoryDetail, isLoading: categoryDetailLoading } = useQuery({
+    queryKey: ["category", viewingCategory?._id],
+    queryFn: () => categoryService.getById(viewingCategory!._id),
+    enabled: !!viewingCategory?._id,
   });
 
   const createMutation = useMutation({
@@ -69,6 +90,16 @@ export default function CategoriesPage() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories", "dashboard"] });
       handleClose();
+    },
+    onError: (error: {
+      response?: { data?: { message?: string } };
+      message?: string;
+    }) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "เกิดข้อผิดพลาดในการสร้างหมวดหมู่";
+      setErrorMessage(message);
     },
   });
 
@@ -89,6 +120,16 @@ export default function CategoriesPage() {
       queryClient.invalidateQueries({ queryKey: ["categories", "dashboard"] });
       handleClose();
     },
+    onError: (error: {
+      response?: { data?: { message?: string } };
+      message?: string;
+    }) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "เกิดข้อผิดพลาดในการแก้ไขหมวดหมู่";
+      setErrorMessage(message);
+    },
   });
 
   const deleteMutation = useMutation({
@@ -97,7 +138,41 @@ export default function CategoriesPage() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories", "dashboard"] });
     },
+    onError: (error: {
+      response?: { data?: { message?: string } };
+      message?: string;
+    }) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "เกิดข้อผิดพลาดในการลบหมวดหมู่";
+      setErrorMessage(message);
+    },
   });
+
+  const mockDataMutation = useMutation({
+    mutationFn: (count: number) => categoryService.generateMockData(count),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["categories", "dashboard"] });
+      setErrorMessage(null);
+    },
+    onError: (error: {
+      response?: { data?: { message?: string } };
+      message?: string;
+    }) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "เกิดข้อผิดพลาดในการสร้างข้อมูลจำลอง";
+      setErrorMessage(message);
+    },
+  });
+
+  const handleGenerateMockData = () => {
+    if (!confirm("คุณต้องการสร้างข้อมูลจำลอง 20 รายการหรือไม่?")) return;
+    mockDataMutation.mutate(20);
+  };
 
   const categories = categoriesResponse?.data || [];
   const pagination = categoriesResponse?.pagination;
@@ -113,6 +188,36 @@ export default function CategoriesPage() {
   const handleLimitChange = (event: { target: { value: unknown } }) => {
     setLimit(Number(event.target.value));
     setPage(1); // Reset to first page when changing limit
+  };
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+      setPage(1); // Reset to first page when searching
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchInput(event.target.value);
+  };
+
+  const handleSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setSearchQuery(searchInput);
+    setPage(1);
+  };
+
+  const handleViewDetail = (category: Category) => {
+    setViewingCategory(category);
+    setDetailOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setDetailOpen(false);
+    setViewingCategory(null);
   };
 
   const handleOpen = (category?: Category) => {
@@ -142,19 +247,6 @@ export default function CategoriesPage() {
     deleteMutation.mutate(id);
   };
 
-  if (loading) {
-    return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="60vh"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
     <Box>
       <Box
@@ -162,78 +254,141 @@ export default function CategoriesPage() {
         justifyContent="space-between"
         alignItems="center"
         mb={3}
+        flexWrap="wrap"
+        gap={2}
       >
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           จัดการหมวดหมู่
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpen()}
-        >
-          เพิ่มหมวดหมู่
-        </Button>
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <Box
+            component="form"
+            onSubmit={handleSearchSubmit}
+            sx={{ display: "flex", gap: 1 }}
+          >
+            <TextField
+              placeholder="ค้นหาหมวดหมู่..."
+              variant="outlined"
+              size="small"
+              value={searchInput}
+              onChange={handleSearchChange}
+              InputProps={{
+                startAdornment: (
+                  <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />
+                ),
+              }}
+              sx={{ minWidth: 250 }}
+            />
+            <Button
+              type="submit"
+              variant="outlined"
+              size="small"
+              sx={{ minWidth: "auto", px: 2 }}
+            >
+              ค้นหา
+            </Button>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<DataObjectIcon />}
+            onClick={handleGenerateMockData}
+            disabled={mockDataMutation.isPending}
+            color="secondary"
+          >
+            {mockDataMutation.isPending ? "กำลังสร้าง..." : "Mock Data (20)"}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpen()}
+          >
+            เพิ่มหมวดหมู่
+          </Button>
+        </Box>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>รหัส</TableCell>
-              <TableCell>ชื่อหมวดหมู่</TableCell>
-              <TableCell>คำอธิบาย</TableCell>
-              <TableCell>สถานะ</TableCell>
-              <TableCell align="center">จัดการ</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {categories.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center">
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ py: 3 }}
-                  >
-                    ไม่พบข้อมูลหมวดหมู่
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              categories.map((category: Category) => (
-                <TableRow key={category._id}>
-                  <TableCell>{category.code}</TableCell>
-                  <TableCell>{category.name}</TableCell>
-                  <TableCell>{category.description || "-"}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={category.active ? "ใช้งาน" : "ไม่ใช้งาน"}
-                      color={category.active ? "success" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpen(category)}
-                      color="primary"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(category._id)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
+      {loading ? (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          minHeight="60vh"
+        >
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>รหัส</TableCell>
+                  <TableCell>ชื่อหมวดหมู่</TableCell>
+                  <TableCell>คำอธิบาย</TableCell>
+                  <TableCell>สถานะ</TableCell>
+                  <TableCell align="center">จัดการ</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              </TableHead>
+              <TableBody>
+                {categories.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ py: 3 }}
+                      >
+                        ไม่พบข้อมูลหมวดหมู่
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  categories.map((category: Category) => (
+                    <TableRow key={category._id}>
+                      <TableCell>{category.code}</TableCell>
+                      <TableCell>{category.name}</TableCell>
+                      <TableCell>{category.description || "-"}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={category.active ? "ใช้งาน" : "ไม่ใช้งาน"}
+                          color={category.active ? "success" : "default"}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleViewDetail(category)}
+                          color="info"
+                          title="ดูข้อมูลเพิ่มเติม"
+                        >
+                          <VisibilityIcon />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpen(category)}
+                          color="primary"
+                          title="แก้ไข"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDelete(category._id)}
+                          color="error"
+                          title="ลบ"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
 
       {pagination && (
         <Box
@@ -332,6 +487,101 @@ export default function CategoriesPage() {
           )}
         </Formik>
       </Dialog>
+
+      <Dialog
+        open={detailOpen}
+        onClose={handleCloseDetail}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>รายละเอียดหมวดหมู่</DialogTitle>
+        <DialogContent>
+          {categoryDetailLoading ? (
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              py={4}
+            >
+              <CircularProgress />
+            </Box>
+          ) : categoryDetail ? (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  รหัสหมวดหมู่
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {categoryDetail.code}
+                </Typography>
+              </Box>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  ชื่อหมวดหมู่
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {categoryDetail.name}
+                </Typography>
+              </Box>
+              {categoryDetail.description && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    คำอธิบาย
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {categoryDetail.description}
+                  </Typography>
+                </Box>
+              )}
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  สถานะ
+                </Typography>
+                <Chip
+                  label={categoryDetail.active ? "ใช้งาน" : "ไม่ใช้งาน"}
+                  color={categoryDetail.active ? "success" : "default"}
+                  size="small"
+                  sx={{ mt: 1 }}
+                />
+              </Box>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+              ไม่พบข้อมูลหมวดหมู่
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDetail}>ปิด</Button>
+          {categoryDetail && (
+            <Button
+              variant="contained"
+              startIcon={<EditIcon />}
+              onClick={() => {
+                handleCloseDetail();
+                handleOpen(categoryDetail);
+              }}
+            >
+              แก้ไข
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={!!errorMessage}
+        autoHideDuration={6000}
+        onClose={() => setErrorMessage(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setErrorMessage(null)}
+          severity="error"
+          sx={{ width: "100%" }}
+        >
+          {errorMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

@@ -73,6 +73,11 @@ class ProductService {
   async delete(id: string): Promise<void> {
     await api.delete(`/product/${id}`);
   }
+
+  async generateMockData(count: number = 20): Promise<Product[]> {
+    const response = await api.post(`/product/mock?count=${count}`);
+    return response.data;
+  }
 }
 
 export const productService = new ProductService();

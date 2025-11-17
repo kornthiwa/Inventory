@@ -57,6 +57,11 @@ class CategoryService {
   async delete(id: string): Promise<void> {
     await api.delete(`/category/${id}`);
   }
+
+  async generateMockData(count: number = 20): Promise<Category[]> {
+    const response = await api.post(`/category/mock?count=${count}`);
+    return response.data;
+  }
 }
 
 export const categoryService = new CategoryService();
