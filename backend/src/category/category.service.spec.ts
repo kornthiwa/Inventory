@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
@@ -29,12 +28,17 @@ describe('CategoryService', () => {
   };
 
   const createMockCategoryModel = (): Model<CategoryDocument> => {
+    let customSave: jest.Mock | null = null;
+
     const mockCategoryModel = function (data: Record<string, unknown>) {
-      return {
+      const instance = {
         ...mockCategory,
         ...data,
-        save: jest.fn().mockResolvedValue({ ...mockCategory, ...data }),
+        save:
+          customSave ||
+          jest.fn().mockResolvedValue({ ...mockCategory, ...data }),
       };
+      return instance;
     } as unknown as Model<CategoryDocument>;
 
     (mockCategoryModel as any).find = jest.fn();
@@ -43,6 +47,12 @@ describe('CategoryService', () => {
     (mockCategoryModel as any).findByIdAndDelete = jest.fn();
     (mockCategoryModel as any).countDocuments = jest.fn();
     (mockCategoryModel as any).create = jest.fn();
+    (mockCategoryModel as any).setCustomSave = (saveFn: jest.Mock) => {
+      customSave = saveFn;
+    };
+    (mockCategoryModel as any).resetCustomSave = () => {
+      customSave = null;
+    };
 
     return mockCategoryModel;
   };
@@ -96,11 +106,15 @@ describe('CategoryService', () => {
 
     it('should throw BadRequestException when duplicate name or code', async () => {
       jest.spyOn(model, 'countDocuments').mockResolvedValue(0);
-      const mockInstance = new (model as any)({});
-      mockInstance.save = jest.fn().mockRejectedValue({ code: 11000 });
-      jest
-        .spyOn(model as any, 'constructor')
-        .mockImplementation(() => mockInstance);
+
+      // Create error object with code 11000 (MongoDB duplicate key error)
+      const duplicateError = Object.assign(new Error('Duplicate key'), {
+        code: 11000,
+      });
+
+      // Set custom save that rejects
+      const rejectingSave = jest.fn().mockRejectedValue(duplicateError);
+      (model as any).setCustomSave(rejectingSave);
 
       await expect(service.create(createCategoryDto)).rejects.toThrow(
         BadRequestException,
@@ -108,6 +122,9 @@ describe('CategoryService', () => {
       await expect(service.create(createCategoryDto)).rejects.toThrow(
         'Category name or code already exists',
       );
+
+      // Reset custom save
+      (model as any).resetCustomSave();
     });
   });
 
@@ -177,7 +194,7 @@ describe('CategoryService', () => {
 
       expect(model.find).toHaveBeenCalledWith(
         expect.objectContaining({
-          active: true,
+          isActive: true,
         }),
       );
     });
