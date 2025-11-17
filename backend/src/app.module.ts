@@ -17,7 +17,12 @@ import databaseConfig from './config/database.config';
       expandVariables: true,
       load: [appConfig, databaseConfig],
     }),
-    MongooseModule.forRoot(getMongoConnectionString()),
+    MongooseModule.forRoot(getMongoConnectionString(), {
+      retryWrites: true,
+      w: 'majority',
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    }),
     ProductModule,
     CategoryModule,
   ],
