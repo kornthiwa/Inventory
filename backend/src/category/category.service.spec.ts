@@ -84,7 +84,7 @@ describe('CategoryService', () => {
     const createCategoryDto: CreateCategoryDto = {
       name: 'Test Category',
       description: 'Test Description',
-      isActive: true,
+      active: true,
     };
 
     it('should create a category with auto-generated code', async () => {
@@ -179,7 +179,7 @@ describe('CategoryService', () => {
     });
 
     it('should filter by active status', async () => {
-      const query: QueryCategoryDto = { page: 1, limit: 10, isActive: true };
+      const query: QueryCategoryDto = { page: 1, limit: 10, active: true };
       const mockQuery = {
         sort: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
@@ -194,7 +194,7 @@ describe('CategoryService', () => {
 
       expect(model.find).toHaveBeenCalledWith(
         expect.objectContaining({
-          isActive: true,
+          active: true,
         }),
       );
     });

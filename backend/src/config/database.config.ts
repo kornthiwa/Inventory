@@ -1,3 +1,5 @@
+import { registerAs } from '@nestjs/config';
+
 export const getMongoConnectionString = (): string => {
   // รองรับ Railway และ cloud providers ต่างๆ
   // Railway มักใช้ MONGO_URL, MONGODB_URL, หรือ DATABASE_URL
@@ -29,3 +31,12 @@ export const getMongoConnectionString = (): string => {
 
   return `mongodb://${host}:${port}/`;
 };
+
+export default registerAs('database', () => ({
+  uri: getMongoConnectionString(),
+  host: process.env.MONGODB_HOST || 'localhost',
+  port: parseInt(process.env.MONGODB_PORT || '27017', 10),
+  database: process.env.MONGODB_DATABASE || 'inventory',
+  username: process.env.MONGODB_USERNAME,
+  password: process.env.MONGODB_PASSWORD,
+}));

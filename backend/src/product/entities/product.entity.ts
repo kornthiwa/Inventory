@@ -8,7 +8,12 @@ export class Product {
   @Prop({ default: true, description: 'The status of the product' })
   active!: boolean;
 
-  @Prop({ required: true, trim: true, description: 'The code of the product' })
+  @Prop({
+    required: true,
+    unique: true,
+    trim: true,
+    description: 'The code of the product',
+  })
   code!: string;
 
   @Prop({ required: true, trim: true, description: 'The name of the product' })
@@ -29,7 +34,6 @@ export class Product {
   quantity!: number;
 
   @Prop({
-    unique: true,
     sparse: true,
     trim: true,
     description: 'The SKU of the product',

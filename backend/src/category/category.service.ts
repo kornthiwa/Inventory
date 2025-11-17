@@ -28,14 +28,14 @@ export class CategoryService {
       return await createdCategory.save();
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && error.code === 11000) {
-        throw new BadRequestException('Category name or code already exists');
+        throw new BadRequestException('Category code already exists');
       }
       throw error;
     }
   }
 
   async findAll(query: QueryCategoryDto) {
-    const { page = 1, limit = 10, search, isActive } = query;
+    const { page = 1, limit = 10, search, active } = query;
 
     const skip = (page - 1) * limit;
     const filter: Record<string, unknown> = {};
@@ -50,8 +50,8 @@ export class CategoryService {
     }
 
     // Active filter
-    if (isActive !== undefined) {
-      filter.isActive = isActive;
+    if (active !== undefined) {
+      filter.active = active;
     }
 
     const [data, total] = await Promise.all([

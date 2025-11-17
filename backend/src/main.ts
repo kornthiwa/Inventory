@@ -1,9 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
   // ตั้งค่า ValidationPipe
   app.useGlobalPipes(
@@ -19,13 +21,15 @@ async function bootstrap() {
 
   // ตั้งค่า CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || '*', // อนุญาตทุก origin หรือระบุเฉพาะ origin ที่ต้องการ
+    origin: configService.get<string>('app.corsOrigin') || '*', // อนุญาตทุก origin หรือระบุเฉพาะ origin ที่ต้องการ
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true, // อนุญาตให้ส่ง cookies และ credentials
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = configService.get<number>('app.port') || 3001;
+  await app.listen(port);
+  console.log(`Application is running on: http://localhost:${port}`);
 }
 
 bootstrap().catch((error) => {

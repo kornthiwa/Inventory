@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd backend && yarn install && yarn build",
-    "start": "cd backend && yarn start:prod"
+    "setup": "cd web && yarn install && cd ../backend && yarn install",
+    "dev:web": "cd web && yarn dev",
+    "dev:api": "cd backend && yarn start:dev"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.11.1"
   }
 }

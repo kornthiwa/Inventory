@@ -27,5 +27,5 @@ export class QueryCategoryDto {
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
-  isActive?: boolean | undefined;
+  active?: boolean | undefined;
 }

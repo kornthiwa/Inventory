@@ -10,7 +10,6 @@ export class Category {
 
   @Prop({
     required: true,
-    unique: true,
     trim: true,
     description: 'The name of the category',
   })
