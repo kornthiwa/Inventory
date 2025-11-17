@@ -1,0 +1,12 @@
+{
+  "name": "inventory-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd backend && yarn install && yarn build",
+    "start": "cd backend && yarn start:prod"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
