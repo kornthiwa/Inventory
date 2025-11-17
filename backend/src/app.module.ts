@@ -13,7 +13,7 @@ import databaseConfig from './config/database.config';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '../.env', // อ่านไฟล์ .env จาก root ของโปรเจค
+      envFilePath: '.env',
       expandVariables: true,
       load: [appConfig, databaseConfig],
     }),
