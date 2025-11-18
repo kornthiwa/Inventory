@@ -50,9 +50,10 @@ const productSchema = Yup.object().shape({
     .min(0, "ราคาต้องมากกว่าหรือเท่ากับ 0")
     .required("กรุณากรอกราคา"),
   quantity: Yup.number()
-    .min(0, "จำนวนต้องมากกว่าหรือเท่ากับ 0")
+    .min(1, "จำนวนต้องมากกว่าหรือเท่ากับ 1")
     .required("กรุณากรอกจำนวน"),
   category: Yup.string().required("กรุณาเลือกหมวดหมู่"),
+  sku: Yup.string().required("กรุณากรอก SKU"),
 });
 
 export default function ProductsPage() {
@@ -203,15 +204,14 @@ export default function ProductsPage() {
 
   const handleLimitChange = (event: { target: { value: unknown } }) => {
     setLimit(Number(event.target.value));
-    setPage(1); // Reset to first page when changing limit
+    setPage(1);
   };
 
-  // Debounce search query
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(searchInput);
-      setPage(1); // Reset to first page when searching
-    }, 500); // Wait 500ms after user stops typing
+      setPage(1);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchInput]);
@@ -545,7 +545,14 @@ export default function ProductsPage() {
                       helperText={touched.quantity && errors.quantity}
                     />
                   </Box>
-                  <Field as={TextField} name="sku" label="SKU" fullWidth />
+                  <Field
+                    as={TextField}
+                    name="sku"
+                    label="SKU"
+                    fullWidth
+                    error={touched.sku && !!errors.sku}
+                    helperText={touched.sku && errors.sku}
+                  />
                   <Field
                     as={TextField}
                     name="category"
@@ -556,7 +563,6 @@ export default function ProductsPage() {
                     error={touched.category && !!errors.category}
                     helperText={touched.category && errors.category}
                   >
-                    <option value="">เลือกหมวดหมู่</option>
                     {categories.map((cat: Category) => (
                       <option key={cat._id} value={cat._id}>
                         {cat.name}
